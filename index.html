@@ -421,7 +421,7 @@ function renderMap(focusStore){
   if(focusStore){
     setTimeout(()=>{
       leafletMap.invalidateSize();
-      leafletMap.setView([focusStore.lat, focusStore.lng], 16);
+      leafletMap.setView([focusStore.lat, focusStore.lng], 18, {animate:true, duration:0.5});
       showMapCard(focusStore);
     }, 180);
   } else {
