@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Nearby-PH — Find it near you</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --blue:#1f6fd6; --blue-d:#1559b0; --ink:#1a2233; --muted:#6b7688; --line:#e6e9ef;
+    --bg:#f4f6fa; --card:#ffffff; --green:#1f9d6b; --green-bg:#e4f6ee; --green-ink:#0f6e4b;
+    --amber:#c47a12; --amber-bg:#fbeecf; --pink:#e0568a; --pink-bg:#fbe6ef;
+    --purple:#7b52c9; --purple-bg:#efe8fb; --hard:#e0912a; --hard-bg:#fbeecf; --food:#1f9d6b; --food-bg:#e4f6ee;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#c9cdd6;color:var(--ink);overflow:hidden;}
+  #phone{max-width:420px;height:100vh;margin:0 auto;background:var(--bg);position:relative;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,.15);}
+  .statusbar{height:26px;flex:0 0 26px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font-size:12px;font-weight:600;z-index:20;}
+  .statusbar .dots{letter-spacing:2px;}
+  .screen{flex:1;min-height:0;display:none;flex-direction:column;}
+  .screen.active{display:flex;animation:fade .2s ease;}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .hd{flex:0 0 auto;background:var(--blue);color:#fff;padding:14px 16px 18px;position:relative;}
+  .hd .brand{font-size:22px;font-weight:800;letter-spacing:-.5px;}
+  .hd .brand span{color:#bcd8ff;}
+  .hd .loc{font-size:12.5px;color:#d6e6ff;margin-top:2px;display:flex;align-items:center;gap:4px;}
+  .searchbar{margin-top:12px;background:#fff;border-radius:26px;display:flex;align-items:center;gap:8px;padding:11px 16px;box-shadow:0 2px 8px rgba(0,0,0,.08);}
+  .searchbar input{border:none;outline:none;flex:1;font-size:14px;color:var(--ink);background:transparent;}
+  .searchbar .ic{color:var(--muted);font-size:16px;}
+  .menu-btn{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;position:absolute;right:16px;top:14px;font-size:15px;}
+  .body{padding:14px 16px;}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+  .chip{background:#fff;border:1px solid var(--line);border-radius:16px;padding:6px 13px;font-size:12.5px;color:var(--muted);cursor:pointer;}
+  .chip.solid{background:#eef1ff;color:var(--blue);border-color:#dbe3ff;font-weight:600;}
+  .chip.sort{background:#eef4fd;border-color:#d8e6fb;color:var(--blue);font-weight:600;}
+  .chip.sort.off{background:#fff;color:var(--muted);border-color:var(--line);font-weight:500;}
+  .sect{font-size:15px;font-weight:700;margin:16px 0 10px;display:flex;justify-content:space-between;align-items:center;}
+  .sect .see{font-size:12.5px;color:var(--blue);font-weight:600;cursor:pointer;}
+  .cats{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .cat{border-radius:14px;padding:14px;height:78px;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;}
+  .cat .dot{width:26px;height:26px;border-radius:8px;}
+  .cat .nm{font-weight:700;font-size:14.5px;}
+  .cat.hard{background:var(--hard-bg);} .cat.hard .dot{background:var(--hard);} .cat.hard .nm{color:#8a5510;}
+  .cat.elec{background:var(--purple-bg);} .cat.elec .dot{background:var(--purple);} .cat.elec .nm{color:#5a3596;}
+  .cat.clo{background:var(--pink-bg);} .cat.clo .dot{background:var(--pink);} .cat.clo .nm{color:#a83567;}
+  .cat.food{background:var(--food-bg);} .cat.food .dot{background:var(--food);} .cat.food .nm{color:#0f6e4b;}
+  .srow{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px;display:flex;align-items:center;gap:11px;margin-bottom:10px;cursor:pointer;}
+  .thumb{width:44px;height:44px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#fff;}
+  .srow .info{flex:1;min-width:0;}
+  .srow .nm{font-weight:700;font-size:14px;}
+  .srow .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+  .badge{background:var(--green-bg);color:var(--green-ink);font-size:12px;font-weight:700;padding:4px 9px;border-radius:9px;white-space:nowrap;}
+  .rcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:12px;}
+  .rcard .top{display:flex;gap:11px;}
+  .rcard .nm{font-weight:700;font-size:15px;line-height:1.25;}
+  .rcard .sub{font-size:12px;color:var(--muted);margin-top:3px;}
+  .stock{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:7px;margin-top:7px;}
+  .stock.in{background:var(--green-bg);color:var(--green-ink);}
+  .stock.low{background:var(--amber-bg);color:var(--amber);}
+  .price{font-weight:700;font-size:13px;margin-top:7px;}
+  .price .per{color:var(--muted);font-weight:500;font-size:11.5px;}
+  .btns{display:flex;gap:9px;margin-top:11px;}
+  .btn{flex:1;border-radius:9px;padding:10px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;border:1px solid var(--blue);}
+  .btn.pri{background:var(--blue);color:#fff;}
+  .btn.sec{background:#fff;color:var(--blue);}
+  .nav{flex:0 0 60px;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20;}
+  .nav a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;color:var(--muted);cursor:pointer;text-decoration:none;}
+  .nav a.on{color:var(--blue);font-weight:600;}
+  .nav .ni{font-size:18px;line-height:1;}
+  .bhd{flex:0 0 auto;background:var(--blue);color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px;}
+  .bhd .back{font-size:20px;cursor:pointer;width:26px;}
+  .bhd .field{flex:1;background:#fff;border-radius:22px;padding:9px 15px;color:var(--ink);font-size:13.5px;display:flex;align-items:center;gap:7px;}
+  .bhd .field .x{margin-left:auto;color:var(--muted);cursor:pointer;}
+  .toggle{display:inline-flex;background:#eef1f6;border-radius:20px;padding:3px;}
+  .toggle span{padding:6px 18px;border-radius:17px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;}
+  .toggle span.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  #s-results .scroll{display:flex;flex-direction:column;}
+  .res-top{flex:0 0 auto;padding:14px 16px 0;}
+  #resListWrap{flex:1;min-height:0;overflow-y:auto;padding:0 16px 14px;}
+  #resMapWrap{flex:1;min-height:0;display:none;position:relative;}
+  #map{position:absolute;inset:0;width:100%;height:100%;background:#e8ecf0;}
+  .leaflet-container{font-family:inherit;}
+  .photo{flex:0 0 auto;height:150px;background:linear-gradient(135deg,#d4dae6,#c3cdde);display:flex;align-items:center;justify-content:center;color:#8a97ad;font-size:12px;font-weight:600;letter-spacing:1px;position:relative;}
+  .photo .bk{position:absolute;left:12px;top:12px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;}
+  .photo .sv{position:absolute;right:12px;top:12px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;}
+  .dhead{padding:14px 16px 0;}
+  .dhead .nm{font-size:20px;font-weight:800;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;align-items:center;}
+  .tag{font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:7px;}
+  .tag.cat{background:var(--hard-bg);color:#8a5510;}
+  .tag.open{background:var(--green-bg);color:var(--green-ink);}
+  .tag.rate{color:var(--muted);font-weight:600;font-size:12px;}
+  .plist{padding:0 16px;}
+  .pitem{border:1px solid var(--line);border-radius:11px;padding:12px 13px;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center;}
+  .pitem.hl{background:#eef4fd;border-color:#cfe0fa;}
+  .pitem .pn{font-weight:600;font-size:14px;}
+  .pitem .tagline{font-size:11px;color:var(--blue);font-weight:700;margin-top:2px;letter-spacing:.3px;}
+  .pitem .pp{font-weight:700;font-size:14px;}
+  .twocol{display:flex;gap:11px;padding:14px 16px 20px;}
+  .infocard{flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;}
+  .infocard .h{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:5px;}
+  .infocard .v{font-size:12.5px;line-height:1.5;}
+  .searchmini{border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--muted);font-size:12.5px;margin:6px 0 11px;display:flex;gap:7px;align-items:center;}
+  .count{font-size:12px;color:var(--muted);font-weight:600;}
+  .seeall{color:var(--blue);font-weight:600;font-size:13px;text-align:center;padding:11px;cursor:pointer;}
+  .mapcard{position:absolute;left:12px;right:12px;bottom:12px;background:#fff;border-radius:14px;padding:13px;box-shadow:0 6px 24px rgba(0,0,0,.18);display:none;z-index:500;}
+  .mapcard.show{display:block;}
+  .mapcard .top{display:flex;gap:11px;align-items:center;}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:#1a2233;color:#fff;padding:11px 18px;border-radius:22px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;z-index:999;}
+  .toast.show{opacity:.95;}
+  .empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:14px;}
+</style>
+</head>
+<body>
+<div id="phone">
+  <div class="statusbar"><span>9:41</span><span class="dots">LTE ▪▪▪</span></div>
+
+  <div class="screen active" id="s-home">
+    <div class="hd">
+      <div class="menu-btn">☰</div>
+      <div class="brand">Nearby<span>PH</span></div>
+      <div class="loc">📍 Poblacion, Kidapawan City ▾</div>
+      <div class="searchbar">
+        <span class="ic">🔍</span>
+        <input id="homeSearch" placeholder="Anong hinahanap mo? e.g. PVC pipe" />
+      </div>
+    </div>
+    <div class="scroll">
+      <div class="body">
+        <div class="chips">
+          <div class="chip" onclick="quickSearch('extension cord')">extension cord</div>
+          <div class="chip" onclick="quickSearch('paint roller')">paint roller</div>
+          <div class="chip" onclick="quickSearch('t-shirt')">t-shirt</div>
+        </div>
+        <div class="sect">Browse by category</div>
+        <div class="cats">
+          <div class="cat hard" onclick="openCategory('Hardware')"><div class="dot"></div><div class="nm">Hardware</div></div>
+          <div class="cat elec" onclick="openCategory('Electronics')"><div class="dot"></div><div class="nm">Electronics</div></div>
+          <div class="cat clo" onclick="openCategory('Clothing')"><div class="dot"></div><div class="nm">Clothing</div></div>
+          <div class="cat food" onclick="openCategory('Food')"><div class="dot"></div><div class="nm">Food</div></div>
+        </div>
+        <div class="sect">Stores near you <span class="see" onclick="openCategory('All')">See all</span></div>
+        <div id="homeStores"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen" id="s-results">
+    <div class="bhd">
+      <span class="back" onclick="go('home')">←</span>
+      <div class="field"><span>🔍</span><span id="resQuery">PVC pipe</span><span class="x" onclick="go('home')">✕</span></div>
+    </div>
+    <div class="scroll">
+      <div class="res-top">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;">
+          <div class="count" id="resCount">7 stores nearby carry this</div>
+          <div class="toggle"><span class="on" onclick="setResView('list',this)">List</span><span onclick="setResView('map',this)">Map</span></div>
+        </div>
+        <div class="chips" id="resSort" style="margin-bottom:14px;">
+          <div class="chip sort" onclick="setSort('nearest',this)">Nearest ▾</div>
+          <div class="chip sort off" onclick="setSort('open',this)">Open now</div>
+          <div class="chip sort off" onclick="setSort('price',this)">Lowest price</div>
+        </div>
+      </div>
+      <div id="resListWrap"><div id="resList"></div></div>
+      <div id="resMapWrap"><div id="map"></div><div class="mapcard" id="mapCard"></div></div>
+    </div>
+  </div>
+
+  <div class="screen" id="s-category">
+    <div class="bhd">
+      <span class="back" onclick="go('home')">←</span>
+      <div><div style="font-weight:800;font-size:17px;" id="catTitle">Hardware</div><div style="font-size:12px;color:#d6e6ff;" id="catSub">stores near Kidapawan</div></div>
+    </div>
+    <div class="scroll">
+      <div class="body">
+        <div class="chips" id="catChips" style="margin-bottom:10px;"></div>
+        <div id="catList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen" id="s-store">
+    <div class="scroll">
+      <div class="photo" id="stPhoto">
+        <span class="bk" onclick="goBackFromStore()">←</span>
+        <svg width="100%" height="100%" viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0">
+          <rect width="400" height="150" fill="#c3cdde"/>
+          <rect x="120" y="55" width="160" height="70" fill="#e8edf5"/>
+          <rect x="120" y="42" width="160" height="16" fill="#9aa8c0"/>
+          <polygon points="112,42 288,42 270,26 130,26" fill="#8a97ad"/>
+          <rect x="134" y="70" width="40" height="55" fill="#b7c2d6"/>
+          <rect x="226" y="70" width="40" height="55" fill="#b7c2d6"/>
+          <rect x="185" y="78" width="30" height="47" fill="#6b7896"/>
+          <circle cx="200" cy="100" r="2.5" fill="#e8edf5"/>
+          <rect x="150" y="12" width="100" height="12" rx="2" fill="#6b7896"/>
+        </svg>
+        <span class="sv" onclick="toast('Saved to your list')" style="z-index:2">☆</span>
+        <span id="stPhotoLabel" style="position:absolute;bottom:8px;right:12px;z-index:2;background:rgba(0,0,0,.35);color:#fff;font-size:10px;padding:3px 8px;border-radius:6px;">Sample photo</span>
+      </div>
+      <div class="dhead">
+        <div class="nm"><span id="stName">Store</span><span class="badge" id="stDist">0.4 km</span></div>
+        <div class="tags" id="stTags"></div>
+        <div class="btns" style="margin-top:12px;">
+          <div class="btn pri" onclick="toast('Opening directions…')">Directions</div>
+          <div class="btn sec" onclick="toast('Calling store…')">Call store</div>
+        </div>
+      </div>
+      <div class="sect" style="padding:0 16px;margin-top:16px;">Products here <span class="count" id="stCount">142 listed</span></div>
+      <div class="plist">
+        <div class="searchmini"><span>🔍</span> Search inside this store</div>
+        <div id="stProducts"></div>
+        <div class="seeall" id="stSeeAll">See all products ›</div>
+      </div>
+      <div class="twocol">
+        <div class="infocard"><div class="h">Hours</div><div class="v" id="stHours">Mon–Sat 8AM–7PM<br>Sun 8AM–2PM</div></div>
+        <div class="infocard"><div class="h">Location</div><div class="v" id="stLoc">Kidapawan City</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav" id="nav">
+    <a class="on" data-nav="home" onclick="go('home')"><span class="ni">🔍</span>Search</a>
+    <a data-nav="category" onclick="openCategory('All')"><span class="ni">▦</span>Categories</a>
+    <a data-nav="map" onclick="openMapFromNav()"><span class="ni">📍</span>Map</a>
+    <a data-nav="saved" onclick="toast('Saved is a demo tab')"><span class="ni">☆</span>Saved</a>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* SAMPLE DATA (hardcoded — stands in for a real store database).
+   Centered on Barangay Poblacion, Kidapawan City (7.00833, 125.08944). Street names are real Kidapawan
+   streets; store names, products, prices, and stock are FICTIONAL sample data for prototype demo only. */
+const CENTER = [7.00833, 125.08944];
+const STORES = [
+  { id:1, name:"Poblacion Hardware", cat:"Hardware", dist:0.3, open:true, hours:"Open until 7PM",
+    lat:7.0092, lng:125.0902, rating:4.6, reviews:38, count:142, addr:"Quezon Blvd, Poblacion",
+    tags:["pipes","paint","tools"],
+    products:[{n:'PVC pipe 1/2"',p:85,stock:"in"},{n:"PVC elbow joint",p:22,stock:"in"},{n:"Paint roller",p:65,stock:"in"},{n:"Hammer",p:180,stock:"in"},{n:"Extension cord 3m",p:120,stock:"in"}] },
+  { id:2, name:"Laurel Builders Mart", cat:"Hardware", dist:0.7, open:true, hours:"Open until 8PM",
+    lat:7.0071, lng:125.0921, rating:4.4, reviews:52, count:310, addr:"Jose P. Laurel St, Poblacion",
+    tags:["cement","lumber","steel bars"],
+    products:[{n:'PVC pipe 1/2"',p:79,stock:"in"},{n:"Cement (bag)",p:250,stock:"in"},{n:"Steel bar 10mm",p:210,stock:"in"},{n:"Paint roller",p:59,stock:"in"}] },
+  { id:3, name:"Roxas Hardware Supply", cat:"Hardware", dist:1.1, open:false, hours:"Closed · opens 8AM",
+    lat:7.0055, lng:125.0868, rating:4.1, reviews:20, count:96, addr:"Roxas St, Poblacion",
+    tags:["tools","electrical supplies"],
+    products:[{n:'PVC pipe 1/2"',p:90,stock:"low"},{n:"Wire 2.0mm (m)",p:35,stock:"in"},{n:"Extension cord 3m",p:135,stock:"in"}] },
+  { id:4, name:"Highway Supply Depot", cat:"Hardware", dist:1.6, open:true, hours:"Open 24 hours",
+    lat:7.0148, lng:125.0842, rating:4.5, reviews:77, count:890, addr:"National Highway, Kidapawan",
+    tags:["bulk orders","plumbing"],
+    products:[{n:'PVC pipe 1/2"',p:82,stock:"in"},{n:"Faucet",p:145,stock:"in"},{n:"Paint roller",p:70,stock:"in"}] },
+  { id:5, name:"Osmeña Paint Center", cat:"Hardware", dist:2.1, open:true, hours:"Open until 6PM",
+    lat:7.0038, lng:125.0940, rating:4.3, reviews:31, count:96, addr:"Osmeña Drive, Poblacion",
+    tags:["paint","brushes","thinner"],
+    products:[{n:"Paint roller",p:75,stock:"in"},{n:"Latex paint 1L",p:320,stock:"in"},{n:"Paint brush",p:45,stock:"in"}] },
+  { id:6, name:"Alim Electronics", cat:"Electronics", dist:0.6, open:true, hours:"Open until 8PM",
+    lat:7.0101, lng:125.0885, rating:4.2, reviews:44, count:210, addr:"Alim St, Poblacion",
+    tags:["gadgets","cables","repair"],
+    products:[{n:"Extension cord 3m",p:110,stock:"in"},{n:"HDMI cable",p:150,stock:"in"},{n:"Phone charger",p:99,stock:"in"},{n:"USB flash 32GB",p:280,stock:"in"}] },
+  { id:7, name:"Datu Ingkal Gadgets", cat:"Electronics", dist:1.3, open:true, hours:"Open until 9PM",
+    lat:7.0118, lng:125.0918, rating:4.0, reviews:60, count:340, addr:"Datu Ingkal St, Poblacion",
+    tags:["phones","accessories"],
+    products:[{n:"Phone charger",p:120,stock:"in"},{n:"HDMI cable",p:140,stock:"in"},{n:"Earphones",p:180,stock:"low"}] },
+  { id:8, name:"Mega Market RTW", cat:"Clothing", dist:0.4, open:true, hours:"Open until 7PM",
+    lat:7.0088, lng:125.0898, rating:4.5, reviews:28, count:120, addr:"Kidapawan Mega Market, Poblacion",
+    tags:["RTW","t-shirts","uniforms"],
+    products:[{n:"t-shirt",p:120,stock:"in"},{n:"Polo shirt",p:250,stock:"in"},{n:"Maong pants",p:400,stock:"in"}] },
+  { id:9, name:"Bautista Ukay-Ukay", cat:"Clothing", dist:0.8, open:true, hours:"Open until 8PM",
+    lat:7.0064, lng:125.0910, rating:4.3, reviews:35, count:500, addr:"Bautista St, Poblacion",
+    tags:["ukay-ukay","assorted"],
+    products:[{n:"t-shirt",p:80,stock:"in"},{n:"Jacket",p:150,stock:"in"},{n:"Bag",p:120,stock:"low"}] },
+  { id:10, name:"Rizal Apparel Shop", cat:"Clothing", dist:1.2, open:true, hours:"Open until 8PM",
+    lat:7.0128, lng:125.0876, rating:4.4, reviews:90, count:200, addr:"Rizal St, Poblacion",
+    tags:["clothing","branded"],
+    products:[{n:"t-shirt",p:199,stock:"in"},{n:"Dress",p:499,stock:"in"}] },
+  { id:11, name:"Tindahan ni Mang Ruben", cat:"Food", dist:1.0, open:false, hours:"Closed · opens 6AM",
+    lat:7.0043, lng:125.0928, rating:4.6, reviews:48, count:60, addr:"Datu Piang St, Poblacion",
+    tags:["grocery","snacks","fresh"],
+    products:[{n:"Rice (kg)",p:52,stock:"in"},{n:"Eggs (tray)",p:210,stock:"in"},{n:"Cooking oil 1L",p:95,stock:"in"}] },
+  { id:12, name:"Sinsuat Fresh Mart", cat:"Food", dist:1.5, open:true, hours:"Open until 9PM",
+    lat:7.0112, lng:125.0938, rating:4.5, reviews:120, count:900, addr:"Sinsuat St, Poblacion",
+    tags:["grocery","bulk","fresh"],
+    products:[{n:"Rice (kg)",p:50,stock:"in"},{n:"Sugar (kg)",p:70,stock:"in"},{n:"Cooking oil 1L",p:92,stock:"in"}] },
+];
+
+let currentQuery = "", currentSort = "nearest", currentResults = [], leafletMap = null, backTarget = "home";
+const AVATAR_COLORS = ["#e0912a","#7b52c9","#e0568a","#1f9d6b","#1f6fd6","#c0603a","#4a9dc9","#a8557a"];
+function avatarColor(name){ let h=0; for(let i=0;i<name.length;i++) h=name.charCodeAt(i)+((h<<5)-h); return AVATAR_COLORS[Math.abs(h)%AVATAR_COLORS.length]; }
+function avatar(name, size){
+  const letter = (name.trim()[0]||"?").toUpperCase();
+  const sz = size||44;
+  return '<div class="thumb" style="width:'+sz+'px;height:'+sz+'px;background:'+avatarColor(name)+';font-size:'+(sz*0.42)+'px">'+letter+'</div>';
+}
+
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('s-'+id).classList.add('active');
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.remove('on'));
+  const navmap = {home:'home', results:'home', category:'category', store:''};
+  const key = navmap[id];
+  if(key){ const el=document.querySelector('#nav a[data-nav="'+key+'"]'); if(el) el.classList.add('on'); }
+  document.querySelectorAll('.scroll').forEach(sc=>sc.scrollTop=0);
+}
+
+function renderHome(){
+  const near = [...STORES].sort((a,b)=>a.dist-b.dist).slice(0,4);
+  document.getElementById('homeStores').innerHTML = near.map((s,i)=>storeRow(s,i)).join('');
+}
+function storeRow(s,i){
+  return '<div class="srow" onclick="openStore('+s.id+',\'home\')">'+
+    avatar(s.name)+
+    '<div class="info"><div class="nm">'+s.name+'</div><div class="sub">'+s.cat+' · '+s.hours+'</div></div>'+
+    '<div class="badge">'+s.dist+' km</div></div>';
+}
+
+function quickSearch(q){ document.getElementById('homeSearch').value=q; runSearch(q); }
+function runSearch(q){
+  currentQuery = (q||'').trim();
+  if(!currentQuery) return;
+  currentResults = STORES.filter(s => s.products.some(p => p.n.toLowerCase().includes(currentQuery.toLowerCase())));
+  document.getElementById('resQuery').textContent = currentQuery;
+  currentSort='nearest';
+  document.querySelectorAll('#resSort .chip').forEach((c,idx)=>{c.classList.toggle('off', idx!==0);});
+  setResView('list');
+  sortAndRender();
+  go('results');
+}
+function matchedProduct(s){ return s.products.find(p=>p.n.toLowerCase().includes(currentQuery.toLowerCase())); }
+
+function sortAndRender(){
+  let list = [...currentResults];
+  if(currentSort==='nearest') list.sort((a,b)=>a.dist-b.dist);
+  if(currentSort==='open') list.sort((a,b)=>(b.open?1:0)-(a.open?1:0) || a.dist-b.dist);
+  if(currentSort==='price') list.sort((a,b)=>(matchedProduct(a)?.p||1e9)-(matchedProduct(b)?.p||1e9));
+  const n = list.length;
+  document.getElementById('resCount').textContent = n + (n===1?' store nearby carries this':' stores nearby carry this');
+  const wrap = document.getElementById('resList');
+  if(n===0){ wrap.innerHTML = '<div class="empty">No nearby stores carry \u201c'+currentQuery+'\u201d yet.<br>Try \u201cPVC pipe\u201d, \u201cpaint roller\u201d, or \u201ct-shirt\u201d.</div>'; return; }
+  wrap.innerHTML = list.map(function(s,i){
+    const mp = matchedProduct(s);
+    return '<div class="rcard"><div class="top">'+
+        avatar(s.name)+
+        '<div style="flex:1"><div style="display:flex;justify-content:space-between;gap:8px;">'+
+            '<div class="nm">'+s.name+'</div><div class="badge">'+s.dist+' km</div></div>'+
+          '<div class="sub">'+s.cat+' · '+s.hours+'</div>'+
+          '<span class="stock '+mp.stock+'">'+(mp.stock==='in'?'In stock':'Low stock')+'</span>'+
+          '<div class="price">₱'+mp.p+' <span class="per">'+mp.n+'</span></div></div></div>'+
+      '<div class="btns">'+
+        '<div class="btn pri" onclick="event.stopPropagation();toast(\'Opening directions to '+s.name.replace(/'/g,"")+'…\')">Directions</div>'+
+        '<div class="btn sec" onclick="event.stopPropagation();openStore('+s.id+',\'results\')">View store</div>'+
+      '</div></div>';
+  }).join('');
+}
+function setSort(k,el){
+  currentSort=k;
+  document.querySelectorAll('#resSort .chip').forEach(c=>c.classList.add('off'));
+  if(el) el.classList.remove('off');
+  sortAndRender();
+}
+
+function setResView(view, el){
+  const isMap = view==='map';
+  document.getElementById('resListWrap').style.display = isMap?'none':'block';
+  document.getElementById('resMapWrap').style.display = isMap?'flex':'none';
+  document.getElementById('resSort').style.display = isMap?'none':'flex';
+  document.getElementById('mapCard').classList.remove('show');
+  const t=document.querySelectorAll('#s-results .toggle span');
+  t.forEach(s=>s.classList.remove('on'));
+  if(el){ el.classList.add('on'); }
+  else { (isMap ? t[1] : t[0]).classList.add('on'); }
+  if(isMap) setTimeout(renderMap, 80);
+}
+function renderMap(){
+  const list = currentResults.length?currentResults:STORES;
+  if(!leafletMap){
+    leafletMap = L.map('map',{zoomControl:false}).setView(CENTER,15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(leafletMap);
+  }
+  leafletMap.eachLayer(l=>{ if(l instanceof L.Marker || l instanceof L.CircleMarker) leafletMap.removeLayer(l); });
+  L.circleMarker(CENTER,{radius:8,color:'#fff',weight:3,fillColor:'#1f6fd6',fillOpacity:1}).addTo(leafletMap).bindTooltip("You");
+  const bounds=[CENTER];
+  list.forEach(function(s){
+    const mp = matchedProduct(s) || s.products[0];
+    const icon = L.divIcon({className:'',html:'<div style="background:'+(s.open?'#1f6fd6':'#8a97ad')+';color:#fff;padding:4px 8px;border-radius:12px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3);">₱'+mp.p+' · '+s.dist+'km</div>', iconSize:[1,1]});
+    L.marker([s.lat,s.lng],{icon}).addTo(leafletMap).on('click',()=>showMapCard(s));
+    bounds.push([s.lat,s.lng]);
+  });
+  try{ leafletMap.fitBounds(bounds,{padding:[50,50],maxZoom:16}); }catch(e){}
+  setTimeout(()=>leafletMap.invalidateSize(),50);
+}
+function showMapCard(s){
+  const mp = matchedProduct(s)||s.products[0];
+  const c=document.getElementById('mapCard');
+  c.innerHTML = '<div class="top">'+avatar(s.name)+
+    '<div style="flex:1"><div style="display:flex;justify-content:space-between"><b>'+s.name+'</b><span class="badge">'+s.dist+' km</span></div>'+
+    '<div class="sub" style="font-size:12px;color:#6b7688;margin-top:3px">'+(mp.stock==='in'?'In stock':'Low stock')+' · ₱'+mp.p+' · '+s.hours+'</div></div></div>'+
+    '<div class="btns"><div class="btn pri" onclick="toast(\'Opening directions…\')">Directions</div><div class="btn sec" onclick="openStore('+s.id+',\'results\')">View store</div></div>';
+  c.classList.add('show');
+}
+function openMapFromNav(){
+  go('results');
+  document.getElementById('resQuery').textContent = currentQuery||'Near me';
+  setResView('map');
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.remove('on'));
+  document.querySelector('#nav a[data-nav="map"]').classList.add('on');
+}
+
+function openCategory(cat){
+  const cats=['Hardware','Electronics','Clothing','Food'];
+  const list = cat==='All'? [...STORES] : STORES.filter(s=>s.cat===cat);
+  list.sort((a,b)=>a.dist-b.dist);
+  document.getElementById('catTitle').textContent = cat==='All'?'All stores':cat;
+  document.getElementById('catSub').textContent = list.length+' stores near Kidapawan';
+  document.getElementById('catChips').innerHTML = cats.map(c=>'<div class="chip '+(c===cat?'solid':'')+'" onclick="openCategory(\''+c+'\')">'+c+'</div>').join('');
+  document.getElementById('catList').innerHTML = list.map(function(s,i){
+    return '<div class="srow" onclick="openStore('+s.id+',\'category\')">'+
+      avatar(s.name)+
+      '<div class="info"><div class="nm">'+s.name+'</div><div class="sub">'+s.hours+' · '+s.count+' products</div>'+
+      '<div class="sub" style="color:#98a2b3">'+s.tags.join(' · ')+'</div></div>'+
+      '<div class="badge">'+s.dist+' km</div></div>';
+  }).join('');
+  go('category');
+}
+
+function openStore(id, from){
+  backTarget = from||'home';
+  const s = STORES.find(x=>x.id===id);
+  document.getElementById('stName').textContent = s.name;
+  document.getElementById('stDist').textContent = s.dist+' km';
+  document.getElementById('stCount').textContent = s.count+' listed';
+  document.getElementById('stHours').innerHTML = s.hours.replace(' · ','<br>');
+  document.getElementById('stLoc').textContent = s.addr;
+  document.getElementById('stTags').innerHTML =
+    '<span class="tag cat">'+s.cat+'</span><span class="tag open" style="'+(s.open?'':'background:#f0f0f0;color:#8a97ad')+'">'+s.hours+'</span><span class="tag rate">★ '+s.rating+' ('+s.reviews+')</span>';
+  document.getElementById('stProducts').innerHTML = s.products.map(function(p){
+    const isHit = currentQuery && p.n.toLowerCase().includes(currentQuery.toLowerCase());
+    return '<div class="pitem '+(isHit?'hl':'')+'">'+
+      '<div><div class="pn">'+p.n+'</div>'+(isHit?'<div class="tagline">YOUR SEARCH · '+(p.stock==='in'?'IN STOCK':'LOW STOCK')+'</div>':'')+'</div>'+
+      '<div class="pp">₱'+p.p+'</div></div>';
+  }).join('');
+  document.getElementById('stSeeAll').textContent = 'See all '+s.count+' products ›';
+  go('store');
+}
+function goBackFromStore(){ go(backTarget); }
+
+let toastT=null;
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1600);
+}
+document.getElementById('homeSearch').addEventListener('keydown',e=>{ if(e.key==='Enter') runSearch(e.target.value); });
+renderHome();
+</script>
+</body>
+</html>
