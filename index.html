@@ -14,7 +14,7 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#c9cdd6;color:var(--ink);overflow:hidden;}
-  #phone{max-width:420px;height:100vh;margin:0 auto;background:var(--bg);position:relative;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,.15);}
+  #phone{max-width:420px;height:100vh;height:100dvh;margin:0 auto;background:var(--bg);position:relative;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,.15);}
   .statusbar{height:26px;flex:0 0 26px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font-size:12px;font-weight:600;z-index:20;}
   .statusbar .dots{letter-spacing:2px;}
   .screen{flex:1;min-height:0;display:none;flex-direction:column;}
@@ -203,7 +203,7 @@
         <div class="nm"><span id="stName">Store</span><span class="badge" id="stDist">0.4 km</span></div>
         <div class="tags" id="stTags"></div>
         <div class="btns" style="margin-top:12px;">
-          <div class="btn pri" onclick="toast('Opening directions…')">Directions</div>
+          <div class="btn pri" onclick="directionsToStore()">Directions</div>
           <div class="btn sec" onclick="toast('Calling store…')">Call store</div>
         </div>
       </div>
@@ -287,7 +287,7 @@ const STORES = [
     products:[{n:"Rice (kg)",p:50,stock:"in"},{n:"Sugar (kg)",p:70,stock:"in"},{n:"Cooking oil 1L",p:92,stock:"in"}] },
 ];
 
-let currentQuery = "", currentSort = "nearest", currentResults = [], leafletMap = null, backTarget = "home";
+let currentQuery = "", currentSort = "nearest", currentResults = [], leafletMap = null, backTarget = "home", currentStore = null;
 const AVATAR_COLORS = ["#e0912a","#7b52c9","#e0568a","#1f9d6b","#1f6fd6","#c0603a","#4a9dc9","#a8557a"];
 function avatarColor(name){ let h=0; for(let i=0;i<name.length;i++) h=name.charCodeAt(i)+((h<<5)-h); return AVATAR_COLORS[Math.abs(h)%AVATAR_COLORS.length]; }
 function avatar(name, size){
@@ -362,7 +362,7 @@ function setSort(k,el){
   sortAndRender();
 }
 
-function setResView(view, el){
+function setResView(view, el, focusStore){
   const isMap = view==='map';
   document.getElementById('resListWrap').style.display = isMap?'none':'block';
   document.getElementById('resMapWrap').style.display = isMap?'flex':'none';
@@ -372,10 +372,25 @@ function setResView(view, el){
   t.forEach(s=>s.classList.remove('on'));
   if(el){ el.classList.add('on'); }
   else { (isMap ? t[1] : t[0]).classList.add('on'); }
-  if(isMap) setTimeout(renderMap, 80);
+  if(isMap) setTimeout(()=>renderMap(focusStore), 80);
 }
-function renderMap(){
+
+/* Directions from the store detail screen: open the map view focused on this store */
+function directionsToStore(){
+  if(!currentStore) return;
+  const s = currentStore;
+  go('results');
+  document.getElementById('resQuery').textContent = currentQuery || s.name;
+  setResView('map', null, s);
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.remove('on'));
+  document.querySelector('#nav a[data-nav="map"]').classList.add('on');
+  // show the store card immediately (independent of map tile loading)
+  setTimeout(()=>showMapCard(s), 120);
+}
+function renderMap(focusStore){
   const list = currentResults.length?currentResults:STORES;
+  // if focusing one store, make sure it's in the list to render
+  if(focusStore && list.indexOf(focusStore)===-1) list.push(focusStore);
   if(!leafletMap){
     leafletMap = L.map('map',{zoomControl:false}).setView(CENTER,15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(leafletMap);
@@ -389,8 +404,16 @@ function renderMap(){
     L.marker([s.lat,s.lng],{icon}).addTo(leafletMap).on('click',()=>showMapCard(s));
     bounds.push([s.lat,s.lng]);
   });
-  try{ leafletMap.fitBounds(bounds,{padding:[50,50],maxZoom:16}); }catch(e){}
-  setTimeout(()=>leafletMap.invalidateSize(),50);
+  if(focusStore){
+    setTimeout(()=>{
+      leafletMap.invalidateSize();
+      leafletMap.setView([focusStore.lat, focusStore.lng], 18);
+      showMapCard(focusStore);
+    }, 180);
+  } else {
+    try{ leafletMap.fitBounds(bounds,{padding:[50,50],maxZoom:16}); }catch(e){}
+    setTimeout(()=>leafletMap.invalidateSize(),50);
+  }
 }
 function showMapCard(s){
   const mp = matchedProduct(s)||s.products[0];
@@ -429,6 +452,7 @@ function openCategory(cat){
 function openStore(id, from){
   backTarget = from||'home';
   const s = STORES.find(x=>x.id===id);
+  currentStore = s;
   document.getElementById('stName').textContent = s.name;
   document.getElementById('stDist').textContent = s.dist+' km';
   document.getElementById('stCount').textContent = s.count+' listed';
@@ -453,6 +477,16 @@ function toast(msg){
   clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1600);
 }
 document.getElementById('homeSearch').addEventListener('keydown',e=>{ if(e.key==='Enter') runSearch(e.target.value); });
+
+/* Mobile viewport height fallback: guarantees the phone frame fits the visible screen
+   (and the bottom nav shows) even on browsers without dvh support. */
+function setVH(){
+  document.getElementById('phone').style.height = window.innerHeight + 'px';
+}
+setVH();
+window.addEventListener('resize', setVH);
+window.addEventListener('orientationchange', function(){ setTimeout(setVH, 200); });
+
 renderHome();
 </script>
 </body>
