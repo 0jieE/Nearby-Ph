@@ -123,7 +123,7 @@
       <div class="loc">📍 Poblacion, Kidapawan City ▾</div>
       <div class="searchbar">
         <span class="ic">🔍</span>
-        <input id="homeSearch" placeholder="Anong hinahanap mo? e.g. PVC pipe" />
+        <input id="homeSearch" placeholder="What are you looking for? e.g. PVC pipe" />
       </div>
     </div>
     <div class="scroll">
@@ -350,7 +350,7 @@ function sortAndRender(){
           '<span class="stock '+mp.stock+'">'+(mp.stock==='in'?'In stock':'Low stock')+'</span>'+
           '<div class="price">₱'+mp.p+' <span class="per">'+mp.n+'</span></div></div></div>'+
       '<div class="btns">'+
-        '<div class="btn pri" onclick="event.stopPropagation();toast(\'Opening directions to '+s.name.replace(/'/g,"")+'…\')">Directions</div>'+
+        '<div class="btn pri" onclick="event.stopPropagation();currentStore=getStoreById('+s.id+');directionsToStore();">Directions</div>'+
         '<div class="btn sec" onclick="event.stopPropagation();openStore('+s.id+',\'results\')">View store</div>'+
       '</div></div>';
   }).join('');
@@ -421,23 +421,58 @@ function renderMap(focusStore){
   if(focusStore){
     setTimeout(()=>{
       leafletMap.invalidateSize();
-      leafletMap.setView([focusStore.lat, focusStore.lng], 18, {animate:true, duration:0.5});
+      leafletMap.setView([focusStore.lat, focusStore.lng], 20);
       showMapCard(focusStore);
+      drawRoute(focusStore);
     }, 180);
   } else {
     try{ leafletMap.fitBounds(bounds,{padding:[50,50],maxZoom:16}); }catch(e){}
     setTimeout(()=>leafletMap.invalidateSize(),50);
   }
 }
+let routeLayer = null;
+/* Draw a driving route from the user's location (CENTER) to the store using OSRM
+   (free, no API key). Falls back to a straight dashed line if the service fails. */
+function drawRoute(store){
+  if(!leafletMap || !store) return;
+  // remove any previous route
+  if(routeLayer){ try{ leafletMap.removeLayer(routeLayer); }catch(e){} routeLayer=null; }
+  const from = CENTER;           // [lat, lng]
+  const to = [store.lat, store.lng];
+  // OSRM expects lng,lat order in the URL
+  const url = 'https://router.project-osrm.org/route/v1/driving/'+
+    from[1]+','+from[0]+';'+to[1]+','+to[0]+'?overview=full&geometries=geojson';
+  const fallback = ()=>{
+    // straight dashed line if routing is unavailable
+    routeLayer = L.polyline([from, to], {color:'#1f6fd6', weight:4, opacity:.7, dashArray:'8 8'}).addTo(leafletMap);
+  };
+  fetch(url).then(r=>r.json()).then(data=>{
+    if(data && data.routes && data.routes.length){
+      const coords = data.routes[0].geometry.coordinates.map(c=>[c[1], c[0]]); // to [lat,lng]
+      routeLayer = L.polyline(coords, {color:'#1f6fd6', weight:5, opacity:.85}).addTo(leafletMap);
+      try{ leafletMap.fitBounds(routeLayer.getBounds(), {padding:[60,60], maxZoom:20}); }catch(e){}
+      // update the card with distance + time if present
+      const rt = data.routes[0];
+      if(rt.distance && rt.duration){
+        const km = (rt.distance/1000).toFixed(1);
+        const min = Math.max(1, Math.round(rt.duration/60));
+        const info = document.getElementById('routeInfo');
+        if(info) info.textContent = km+' km · ~'+min+' min drive';
+      }
+    } else { fallback(); }
+  }).catch(()=>{ fallback(); });
+}
 function showMapCard(s){
   const mp = matchedProduct(s)||s.products[0];
   const c=document.getElementById('mapCard');
   c.innerHTML = '<div class="top">'+avatar(s.name)+
     '<div style="flex:1"><div style="display:flex;justify-content:space-between"><b>'+s.name+'</b><span class="badge">'+s.dist+' km</span></div>'+
-    '<div class="sub" style="font-size:12px;color:#6b7688;margin-top:3px">'+(mp.stock==='in'?'In stock':'Low stock')+' · ₱'+mp.p+' · '+s.hours+'</div></div></div>'+
-    '<div class="btns"><div class="btn pri" onclick="toast(\'Opening directions…\')">Directions</div><div class="btn sec" onclick="openStore('+s.id+',\'results\')">View store</div></div>';
+    '<div class="sub" style="font-size:12px;color:#6b7688;margin-top:3px">'+(mp.stock==='in'?'In stock':'Low stock')+' · ₱'+mp.p+' · '+s.hours+'</div>'+
+    '<div id="routeInfo" style="font-size:12px;color:#1f6fd6;font-weight:600;margin-top:4px"></div></div></div>'+
+    '<div class="btns"><div class="btn pri" onclick="drawRoute(getStoreById('+s.id+'))">Directions</div><div class="btn sec" onclick="openStore('+s.id+',\'results\')">View store</div></div>';
   c.classList.add('show');
 }
+function getStoreById(id){ return STORES.find(x=>x.id===id); }
 function openMapFromNav(){
   go('results');
   document.getElementById('resQuery').textContent = currentQuery||'Near me';
